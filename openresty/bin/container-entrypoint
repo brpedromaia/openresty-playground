@@ -1,0 +1,19 @@
+#!/bin/bash
+
+mkdir -p /usr/local/openresty/nginx/ssl
+cd /usr/local/openresty/nginx/ssl
+
+/usr/local/bin/ssl-cert-check -x 10 -c fullchain.crt | grep Valid
+
+if [ "$?" != "0" ];then
+
+  echo "Renewing Certificates"
+  rm -f *.crt
+  curl -s https://www.rec.la/rec.la-bundle.crt -o fullchain.crt 
+  curl -s https://www.rec.la/rec.la-key.pem -o private.key
+
+fi
+
+sed -i "s|\$PLAYGROUND_PUBLIC_DOMAIN|$PLAYGROUND_PUBLIC_DOMAIN|g" /usr/local/openresty/nginx/conf/default.conf
+
+/usr/local/openresty/bin/openresty -g "daemon off;"

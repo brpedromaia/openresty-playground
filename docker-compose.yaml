@@ -1,0 +1,120 @@
+---
+
+
+version: '3.8'
+name: openresty-playground
+
+networks:
+  openresty-playground:
+
+
+services:
+
+  postgres:
+    image: postgres:14.6
+    volumes:
+      - ./.container/database/postgres:/var/lib/postgresql/data
+    container_name: "postgres"
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DB}
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    ports:
+      - 5432:5432
+    restart: always
+    networks:
+      openresty-playground:
+        aliases:
+          - postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "$DATABASE_USER"]
+      interval: 5s
+      timeout: 20s
+      retries: 20
+
+  # redis:
+  #   container_name: "redis"
+  #   image: 'redis:latest'
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   environment:
+  #     IO_REDIS_SERVER: ${IO_REDIS_SERVER}
+  #     IO_REDIS_PORT: ${IO_REDIS_PORT}
+  #     IO_REDIS_DB_SESSION: ${IO_REDIS_DB_SESSION}
+  #   volumes:
+  #     - './.container/database/redis:/data'
+  #   networks:
+  #     openresty-playground:
+  #       aliases:
+  #         - redis
+  #   healthcheck:
+  #     test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+  #     interval: 5s
+  #     timeout: 20s
+  #     retries: 20
+
+  # rabbitmq:
+  #   image: rabbitmq:3-management
+  #   container_name: "rabbitmq"
+  #   restart: always
+  #   environment:
+  #     RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+  #     RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+  #   healthcheck:
+  #     test: rabbitmq-diagnostics -q ping
+  #     interval: 5s
+  #     timeout: 10s
+  #     retries: 3
+  #   volumes:
+  #     - ./.container/database/rabbitmq/data/:/var/lib/rabbitmq/
+  #     - ./.container/database/rabbitmq/logs/:/var/log/rabbitmq/log
+  #   ports:
+  #     - 5672:5672
+  #     - 15672:15672
+  #   networks:
+  #     openresty-playground:
+  #       aliases:
+  #         - rabbitmq
+
+  openresty:
+    build:
+      context: openresty/ 
+      dockerfile: Containerfile
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    environment:
+      - PLAYGROUND_PUBLIC_DOMAIN=${PLAYGROUND_PUBLIC_DOMAIN}
+    networks:
+      openresty-playground:
+        aliases:
+          - openresty
+    volumes:
+      - ./.container/ssl/:/usr/local/openresty/nginx/ssl
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "https://localhost/"]
+      interval: 5s
+      timeout: 20s
+      retries: 20
+
+  http_echo:
+    image: hashicorp/http-echo:alpine
+    command: "-text 'Accessing Internal WebApp'"
+    ports:
+      - 5678:5678
+    restart: always
+    networks:
+      openresty-playground:
+        aliases:
+          - http_echo
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:5678"]
+      interval: 5s
+      timeout: 20s
+      retries: 20
